@@ -50,6 +50,11 @@
          dehydrate_state/1,
          normalize/1,
 
+
+         %% getters for coversions
+         get_field/2,
+         get_cfg_field/2,
+
          %% protocol helpers
          make_enqueue/3,
          make_register_enqueuer/1,
@@ -63,6 +68,8 @@
          make_update_config/1,
          make_garbage_collection/0
         ]).
+
+-export([convert_v0_to_v1/1]).
 
 %% command records representing all the protocol actions that are supported
 -record(enqueue, {pid :: option(pid()),
@@ -532,7 +539,7 @@ convert_v0_to_v1(V0State0) ->
                        #enqueuer{next_seqno = element(2, E),
                                  pending = element(3, E),
                                  status = element(4, E)}
-               end, V0Enqs), 
+               end, V0Enqs),
     V0Cons = rabbit_fifo_v0:get_field(consumers, V0State),
     V1Cons = maps:map(
                fun (_CId, C0) ->
@@ -1679,8 +1686,8 @@ take_next_msg(#?STATE{prefix_msgs = {NumR, [Header | Rem], NumP, P}} = State) ->
     {{'$prefix_msg', Header},
      State#?STATE{prefix_msgs = {NumR-1, Rem, NumP, P}}};
 take_next_msg(#?STATE{returns = Returns,
-                       messages = Messages0,
-                       prefix_msgs = {NumR, R, NumP, P}} = State) ->
+                      messages = Messages0,
+                      prefix_msgs = {NumR, R, NumP, P}} = State) ->
     %% use peek rather than out there as the most likely case is an empty
     %% queue
     case lqueue:peek(Returns) of
@@ -2189,3 +2196,23 @@ notify_decorators_effect(#?STATE{cfg = #cfg{resource = QName}} = State) ->
 notify_decorators_effect(QName, MaxActivePriority, IsEmpty) ->
     {mod_call, rabbit_quorum_queue, spawn_notify_decorators,
      [QName, consumer_state_changed, [MaxActivePriority, IsEmpty]]}.
+
+get_field(Field, State) ->
+    Fields = record_info(fields, ?STATE),
+    Index = record_index_of(Field, Fields),
+    element(Index, State).
+
+get_cfg_field(Field, #?STATE{cfg = Cfg} ) ->
+    Fields = record_info(fields, cfg),
+    Index = record_index_of(Field, Fields),
+    element(Index, Cfg).
+
+record_index_of(F, Fields) ->
+    index_of(2, F, Fields).
+
+index_of(_, F, []) ->
+    exit({field_not_found, F});
+index_of(N, F, [F | _]) ->
+   N;
+index_of(N, F, [_ | T]) ->
+    index_of(N+1, F, T).
