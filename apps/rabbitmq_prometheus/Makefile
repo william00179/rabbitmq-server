@@ -19,16 +19,20 @@ endef
 
 PROJECT := rabbitmq_prometheus
 PROJECT_MOD := rabbit_prometheus_app
-DEPS = accept rabbit rabbitmq_management_agent prometheus rabbitmq_web_dispatch
-# Deps that are not applications
-# rabbitmq_management is added so that we build a custom version, for the Docker image
-BUILD_DEPS = amqp_client rabbit_common rabbitmq_management
+
+# Make sure we know where the applications are located.
+ROOT_DIR ?= $(realpath ../..)
+APPS_DIR ?= $(realpath ..)
+DEPS_DIR ?= $(realpath ../../deps)
+
+LOCAL_DEPS = rabbit rabbitmq_management_agent rabbitmq_web_dispatch
+DEPS = accept prometheus
 TEST_DEPS = rabbitmq_ct_helpers rabbitmq_ct_client_helpers eunit_formatters
 
 EUNIT_OPTS = no_tty, {report, {eunit_progress, [colored, profile]}}
 
-DEP_EARLY_PLUGINS = rabbit_common/mk/rabbitmq-early-plugin.mk
-DEP_PLUGINS = rabbit_common/mk/rabbitmq-plugin.mk
+DEP_EARLY_PLUGINS = $(PROJECT)/../rabbit_common/mk/rabbitmq-early-plugin.mk
+DEP_PLUGINS = $(PROJECT)/../rabbit_common/mk/rabbitmq-plugin.mk
 
 # FIXME: Use erlang.mk patched for RabbitMQ, while waiting for PRs to be
 # reviewed and merged.
@@ -37,13 +41,16 @@ ERLANG_MK_REPO = https://github.com/rabbitmq/erlang.mk.git
 ERLANG_MK_COMMIT = rabbitmq-tmp
 
 ifneq ($(DISABLE_METRICS_COLLECTOR),)
-BUILD_DEPS = accept amqp_client rabbit_common
 RABBITMQ_CONFIG_FILE = $(CURDIR)/rabbitmq-disable-metrics-collector.conf
 export RABBITMQ_CONFIG_FILE
 endif
 
-include ../../rabbitmq-components.mk
-include ../../erlang.mk
+include $(ROOT_DIR)/rabbitmq-components.mk
+include $(ROOT_DIR)/erlang.mk
+
+# rabbitmq_management is added so that we build a custom version, for the Docker image
+$(PROJECT).d::
+	$(MAKE) -C $(APPS_DIR)/rabbitmq_management app IS_APP=1
 
 define MAKE_TARGETS
   awk -F: '/^[^\.%\t][a-zA-Z\._\-]*:+.*$$/ { printf "%s\n", $$1 }' $(MAKEFILE_LIST)
